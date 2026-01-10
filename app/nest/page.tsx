@@ -342,7 +342,7 @@ function CreateNest({
     setBarang((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const totalSalaryCopper = players.reduce((sum, p) => {
+  const totalSalaryCopper = activePlayers.reduce((sum, p) => {
     const salary = getFinalSalary(p.stamp);
     return sum + toCopper(salary.gold, salary.silver, salary.copper);
   }, 0);

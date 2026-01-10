@@ -313,8 +313,12 @@ function CreateNest({
 
   const remainingPool = Math.max(totalBarangCopper - totalStampCost, 0);
 
+  const activePlayers = players.filter((p) => p.nickname.trim() !== "");
+
+  const activePlayerCount = activePlayers.length;
+
   const baseSalaryCopper =
-    players.length > 0 ? Math.floor(remainingPool / players.length) : 0;
+    activePlayerCount > 0 ? Math.floor(remainingPool / activePlayerCount) : 0;
 
   const getFinalSalary = (stamp: number) => {
     const finalCopper = baseSalaryCopper + stamp * stampValueCopper;
@@ -754,7 +758,7 @@ function CreateNest({
                     </thead>
 
                     <tbody>
-                      {players.map((player, index) => {
+                      {activePlayers.map((player, index) => {
                         const base = fromCopper(baseSalaryCopper);
                         const stampSalary = fromCopper(
                           player.stamp * stampValueCopper

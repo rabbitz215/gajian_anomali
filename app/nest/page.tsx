@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 type Player = {
   nickname: string;
   stamp: number;
+  isReceive?: boolean;
 };
 
 type Barang = {
@@ -248,6 +249,7 @@ function CreateNest({
     Array.from({ length: 8 }, () => ({
       nickname: "",
       stamp: 0,
+      isReceive: false,
     }))
   );
 
@@ -278,6 +280,7 @@ function CreateNest({
         Array.from({ length: 8 }, (_, i) => ({
           nickname: playerData[i]?.nickname || "",
           stamp: playerData[i]?.stamps || 0,
+          isReceive: playerData[i]?.is_receive ?? false,
         }))
       );
     }
@@ -421,6 +424,7 @@ function CreateNest({
           salary_gold: salary.gold,
           salary_silver: salary.silver,
           salary_copper: salary.copper,
+          is_receive: p.isReceive ?? false,
         };
       });
 
@@ -754,6 +758,9 @@ function CreateNest({
                         <th className="px-2 py-2 text-right font-bold text-purple-800 uppercase tracking-wide text-[10px]">
                           Final Salary
                         </th>
+                        <th className="px-2 py-2 text-center font-bold text-purple-800 uppercase tracking-wide text-[10px]">
+                          Terima
+                        </th>
                       </tr>
                     </thead>
 
@@ -816,6 +823,26 @@ function CreateNest({
                                   {finalSalary.copper}C
                                 </span>
                               </div>
+                            </td>
+
+                            <td className="px-2 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={player.isReceive ?? false}
+                                onChange={(e) => {
+                                  const copy = [...players];
+                                  const realIndex = players.findIndex(
+                                    (p) => p.nickname === player.nickname
+                                  );
+
+                                  if (realIndex !== -1) {
+                                    copy[realIndex].isReceive =
+                                      e.target.checked;
+                                    setPlayers(copy);
+                                  }
+                                }}
+                                className="h-4 w-4 accent-emerald-500 cursor-pointer"
+                              />
                             </td>
                           </tr>
                         );

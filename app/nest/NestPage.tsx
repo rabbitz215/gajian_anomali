@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrashIcon } from "@heroicons/react/24/outline";
+import { TrashIcon, LockClosedIcon, LockOpenIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { ShareIcon } from "@heroicons/react/24/outline";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "../components/AuthProvider";
 
 /* ---------------- TYPES ---------------- */
 
@@ -32,8 +33,19 @@ export default function NestPage() {
   const [nests, setNests] = useState<Nest[]>([]);
   const [mode, setMode] = useState<"index" | "create" | "edit">("index");
   const [selectedNest, setSelectedNest] = useState<any>(null);
+  const { user, loading } = useAuth();
 
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Check if user is authenticated, redirect to login if not (except for share links)
+  // useEffect(() => {
+  //   const isShareMode = searchParams.get("mode") === "share";
+  //   if (!loading && !user && !isShareMode) {
+  //     router.push("/auth/login");
+  //   }
+  // }, [user, loading, searchParams, router]);
 
   useEffect(() => {
     const modeParam = searchParams.get("mode");
@@ -43,22 +55,26 @@ export default function NestPage() {
       const nest = nests.find((n) => n.id === idParam);
       if (nest) {
         setSelectedNest(nest);
-        setMode("edit"); // tetap pakai CreateNest
+        setMode("edit"); 
       }
     }
   }, [searchParams, nests]);
+
+  const [loadingNests, setLoadingNests] = useState(true);
 
   useEffect(() => {
     document.title = "GAJIAN ANOMALI";
   }, []);
 
   const fetchNests = async () => {
+    setLoadingNests(true);
     const { data, error } = await supabase
       .from("nests")
       .select("*")
       .order("created_at", { ascending: false });
 
     if (!error) setNests(data || []);
+    setLoadingNests(false);
   };
 
   const deleteNest = async (nest: any) => {
@@ -87,12 +103,24 @@ export default function NestPage() {
     fetchNests();
   }, []);
 
-  const router = useRouter();
-  const pathname = usePathname();
-
   const clearAllParams = () => {
     router.replace(pathname);
   };
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🏰</div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Determine if in read-only mode
+  const isReadOnly = !user;
 
   if (mode === "create") {
     return (
@@ -113,7 +141,7 @@ export default function NestPage() {
     return (
       <CreateNest
         initialData={selectedNest}
-        readOnly={searchParams.get("mode") === "share"}
+        readOnly={isReadOnly}
         onCancel={() => {
           setMode("index");
           clearAllParams();
@@ -129,7 +157,14 @@ export default function NestPage() {
   return (
     <NestIndex
       nests={nests}
-      onCreate={() => setMode("create")}
+      loading={loadingNests}
+      onCreate={() => {
+        if (!user) {
+          router.push("/auth/login");
+          return;
+        }
+        setMode("create");
+      }}
       onEdit={(nest) => {
         setSelectedNest(nest);
         setMode("edit");
@@ -143,15 +178,19 @@ export default function NestPage() {
 
 function NestIndex({
   nests,
+  loading,
   onCreate,
   onEdit,
   onDelete,
 }: {
   nests: any[];
+  loading: boolean;
   onCreate: () => void;
   onEdit: (nest: any) => void;
   onDelete: (nest: any) => void;
 }) {
+  const { user } = useAuth();
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -178,7 +217,11 @@ function NestIndex({
         </div>
 
         {/* Nests Grid */}
-        {nests.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          </div>
+        ) : nests.length === 0 ? (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center">
             <div className="text-6xl mb-4">🏰</div>
             <h3 className="text-2xl font-semibold text-gray-700 mb-2">
@@ -259,16 +302,18 @@ function NestIndex({
                     </button>
 
                     {/* DELETE */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(nest);
-                      }}
-                      className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
-                      title="Delete nest"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
+                    {user && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(nest);
+                        }}
+                        className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
+                        title="Delete nest"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -292,6 +337,9 @@ function CreateNest({
   initialData?: any;
   readOnly?: boolean;
 }) {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
   const [barang, setBarang] = useState<Barang[]>([
     { name: "", gold: 0, silver: 0, copper: 0 },
@@ -305,16 +353,21 @@ function CreateNest({
     }))
   );
 
+  // Lock state for edit mode
+  const [isLocked, setIsLocked] = useState(false);
+
   useEffect(() => {
     if (!initialData) return;
 
     setTitle(initialData.title);
     setStampGoldPrice(initialData.stamp_price_gold);
+    setIsLocked(initialData.is_locked ?? false);
 
     fetchNestDetail(initialData.id);
   }, []);
 
   const fetchNestDetail = async (nestId: string) => {
+    setLoading(true);
     const { data: barangData } = await supabase
       .from("nest_barang")
       .select("*")
@@ -336,9 +389,13 @@ function CreateNest({
         }))
       );
     }
+    setLoading(false);
   };
 
   /* --------- UTILS --------- */
+
+  // Combine readOnly (share mode) and isLocked (lock button)
+  const isFormDisabled = readOnly || isLocked;
 
   const toCopper = (g: number, s: number, c: number) => g * 10000 + s * 100 + c;
 
@@ -411,6 +468,8 @@ function CreateNest({
       return;
     }
 
+    setSaving(true);
+
     try {
       let nestId = initialData?.id;
 
@@ -430,6 +489,7 @@ function CreateNest({
             total_salary_gold: totalSalary.gold,
             total_salary_silver: totalSalary.silver,
             total_salary_copper: totalSalary.copper,
+            is_locked: isLocked,
           })
           .eq("id", initialData.id);
 
@@ -454,6 +514,9 @@ function CreateNest({
             total_salary_gold: totalSalary.gold,
             total_salary_silver: totalSalary.silver,
             total_salary_copper: totalSalary.copper,
+            is_locked: false,
+            user_id: user?.id,
+            created_by_email: user?.email,
           })
           .select()
           .single();
@@ -500,11 +563,17 @@ function CreateNest({
     } catch (err) {
       console.error(err);
       alert("Failed to save nest");
+      setSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-6 relative">
+      {loading && (
+        <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
+             <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent"></div>
+        </div>
+      )}
       <div className="w-full mx-auto space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -525,7 +594,47 @@ function CreateNest({
             </p>
           </div>
 
-          <div className="w-[100px]"></div>
+          {/* Lock/Unlock Button */}
+          {!readOnly && initialData && (
+            <button
+              onClick={async () => {
+                const newLockState = !isLocked;
+                setIsLocked(newLockState);
+                
+                // Save to database
+                try {
+                  await supabase
+                    .from("nests")
+                    .update({ is_locked: newLockState })
+                    .eq("id", initialData.id);
+                } catch (err) {
+                  console.error("Failed to update lock state:", err);
+                  // Revert on error
+                  setIsLocked(!newLockState);
+                  alert("Failed to update lock state");
+                }
+              }}
+              className={`group relative px-4 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center gap-2 ${
+                !isLocked
+                  ? "bg-gradient-to-r from-red-500 to-pink-500 text-white"
+                  : "bg-gradient-to-r from-green-500 to-emerald-500 text-white"
+              }`}
+              title={!isLocked ? "Click to lock editing" : "Click to unlock editing"}
+            >
+              {!isLocked ? (
+                <>
+                  <LockClosedIcon className="h-5 w-5" />
+                  <span>Lock</span>
+                </>
+              ) : (
+                <>
+                  <LockOpenIcon className="h-5 w-5" />
+                  <span>Unlock</span>
+                </>
+              )}
+            </button>
+          )}
+          {(readOnly || !initialData) && <div className="w-[100px]"></div>}
         </div>
 
         {/* Two Column Layout */}
@@ -538,7 +647,7 @@ function CreateNest({
                 Nest Title
               </label>
               <input
-                disabled={readOnly}
+                disabled={isFormDisabled}
                 className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all"
                 placeholder="Enter nest name (e.g., Karahan Kontol)"
                 value={title}
@@ -565,7 +674,7 @@ function CreateNest({
                     </p>
 
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       placeholder="Enter nickname"
                       className="w-full border border-blue-200 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition-all"
                       value={player.nickname}
@@ -595,7 +704,7 @@ function CreateNest({
                 </label>
                 <div className="flex items-center gap-2">
                   <input
-                    disabled={readOnly}
+                    disabled={isFormDisabled}
                     type="number"
                     min={0}
                     placeholder="0"
@@ -638,7 +747,7 @@ function CreateNest({
                     </p>
 
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       type="number"
                       min={0}
                       placeholder="0"
@@ -668,7 +777,7 @@ function CreateNest({
                   </div>
                   <h3 className="text-lg font-bold text-gray-800">Barang</h3>
                 </div>
-                {!readOnly && (
+                {!isFormDisabled && (
                   <button
                     onClick={addBarang}
                     className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center gap-1.5"
@@ -697,7 +806,7 @@ function CreateNest({
                   >
                     {/* Item Name */}
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       className="col-span-3 bg-transparent text-xs font-medium placeholder-gray-400 focus:outline-none px-1"
                       placeholder="e.g., L RING"
                       value={b.name}
@@ -710,7 +819,7 @@ function CreateNest({
 
                     {/* Gold */}
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       type="number"
                       min={0}
                       placeholder="0"
@@ -725,7 +834,7 @@ function CreateNest({
 
                     {/* Silver */}
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       type="number"
                       min={0}
                       placeholder="0"
@@ -740,7 +849,7 @@ function CreateNest({
 
                     {/* Copper */}
                     <input
-                      disabled={readOnly}
+                      disabled={isFormDisabled}
                       type="number"
                       min={0}
                       placeholder="0"
@@ -756,10 +865,10 @@ function CreateNest({
                     {/* Remove */}
                     <button
                       type="button"
-                      disabled={barang.length <= 1 && readOnly}
+                      disabled={barang.length <= 1 || isFormDisabled}
                       onClick={() => removeBarang(i)}
                       className={`flex justify-center ${
-                        barang.length <= 1
+                        barang.length <= 1 || isFormDisabled
                           ? "text-gray-300 cursor-not-allowed"
                           : "text-gray-400 hover:text-red-500 hover:bg-red-50 rounded p-0.5"
                       }`}
@@ -889,7 +998,7 @@ function CreateNest({
 
                             <td className="px-2 py-2 text-center">
                               <input
-                                disabled={readOnly}
+                                disabled={isFormDisabled}
                                 type="checkbox"
                                 checked={player.isReceive ?? false}
                                 onChange={(e) => {
@@ -936,14 +1045,19 @@ function CreateNest({
           >
             Cancel
           </button>
-          {!readOnly && (
+          {!isFormDisabled && (
             <button
               onClick={saveNest}
-              className="group relative px-8 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
+              disabled={saving}
+              className="group relative px-8 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-70 disabled:cursor-wait"
             >
               <span className="flex items-center gap-1.5">
-                <span className="text-base">💾</span>
-                Save Nest
+                {saving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                ) : (
+                  <span className="text-base">💾</span>
+                )}
+                {saving ? "Saving..." : "Save Nest"}
               </span>
               <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur"></div>
             </button>

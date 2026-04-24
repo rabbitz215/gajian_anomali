@@ -437,6 +437,39 @@ function CreateNest({
     return fromCopper(finalCopper);
   };
 
+  const copyToDiscord = () => {
+    const formatMoney = (m: { gold: number; silver: number; copper: number }) => {
+      return `${m.gold}G ${String(m.silver).padStart(2, "0")}S ${String(m.copper).padStart(2, "0")}C`;
+    };
+
+    let message = `**🏰 ${title.toUpperCase()} 🏰**\n\n`;
+
+    // Items Section
+    message += `**📦 BARANG**\n\`\`\`\n`;
+    const maxItemNameLen = Math.max(...barang.map(b => b.name.length), 10);
+    barang.forEach((b) => {
+      if (!b.name && b.gold === 0 && b.silver === 0 && b.copper === 0) return;
+      const name = (b.name || "Unnamed Item").padEnd(maxItemNameLen);
+      message += `${name} : ${b.gold}G\n`;
+    });
+    message += "-".repeat(maxItemNameLen + 8) + "\n";
+    message += `${"TOTAL".padEnd(maxItemNameLen)} : ${totalBarang.gold}G\n`;
+    message += `\`\`\`\n\n`;
+
+    // Salary Section
+    message += `**💵 GAJIAN**\n\`\`\`\n`;
+    const maxPlayerNameLen = Math.max(...activePlayers.map(p => p.nickname.length), 11);
+    activePlayers.forEach((p) => {
+      const name = p.nickname.padEnd(maxPlayerNameLen);
+      const salary = getFinalSalary(p.stamp);
+      message += `${name} : ${salary.gold}G\n`;
+    });
+    message += `\`\`\``;
+
+    navigator.clipboard.writeText(message);
+    alert("Copied to clipboard for Discord!");
+  };
+
   /* --------- HANDLERS --------- */
 
   const addPlayer = () => {
@@ -903,13 +936,23 @@ function CreateNest({
           {/* RIGHT SECTION - Salary Summary */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-8">
             <section>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-sm shadow">
-                  💵
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-sm shadow">
+                    💵
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Summary Gajian
+                  </h3>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800">
-                  Summary Gajian
-                </h3>
+                <button
+                  onClick={copyToDiscord}
+                  className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95"
+                  title="Copy formatted for Discord"
+                >
+                  <span className="text-sm">💬</span>
+                  Copy Discord
+                </button>
               </div>
 
               <div className="overflow-x-auto">

@@ -7,8 +7,9 @@ export async function POST(request: Request) {
 
         // Check if Service Role Key exists
         if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            console.error("SUPABASE_SERVICE_ROLE_KEY is missing from environment variables");
             return NextResponse.json(
-                { error: "Missing SUPABASE_SERVICE_ROLE_KEY in .env.local" },
+                { error: "Server Configuration Error: Missing Service Role Key" },
                 { status: 500 }
             );
         }
